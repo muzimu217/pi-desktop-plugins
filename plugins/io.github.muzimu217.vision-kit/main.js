@@ -16,6 +16,8 @@
  */
 "use strict";
 
+const imageMeta = require("./image-meta.js");
+
 const SUPPORTED_EXTENSIONS = {
   png: "image/png",
   jpg: "image/jpeg",
@@ -35,6 +37,105 @@ const TOOL_DESCRIPTION =
   "10MB. Images inside the open workspace read without prompts; paths outside the workspace " +
   "trigger a one-time user grant. Returns a short text summary plus the attached image — never " +
   "echo base64 image data into your reply.";
+
+const INFO_DESCRIPTION =
+  "Inspect ONE local image's metadata WITHOUT loading it into the conversation: format (by magic " +
+  "bytes), pixel dimensions and file size. Use it to check an image before reading it visually " +
+  "(read_image), or to answer size/dimension questions cheaply. Same path rules and supported " +
+  "formats as read_image.";
+
+const LIST_DESCRIPTION =
+  "List image files in the open workspace (png/jpg/jpeg/webp/gif) with sizes, so the agent can " +
+  "discover which images exist before reading any. Optionally scope to a workspace-relative " +
+  "directory. Read-only, results capped at 200 entries.";
+
+/** image_info：头部嗅探格式+尺寸+大小，零解码零 base64。 */
+async function executeImageInfo(args /* , ctx */) {
+  const pi = globalThis.pi;
+  if (!pi || !pi.fs) throw new Error("vision-kit: host fs API unavailable");
+  const rawPath = args && typeof args.path === "string" ? args.path.trim() : "";
+  if (!rawPath) throw new Error("image_info requires a non-empty `path` argument.");
+  const declaredMime = extensionToMime(rawPath);
+  if (!declaredMime) {
+    throw new Error(
+      `Unsupported image type: ${rawPath} — image_info supports ` +
+        Object.keys(SUPPORTED_EXTENSIONS).join(", ") + " only.",
+    );
+  }
+  let workspacePath = null;
+  try {
+    const ws = await pi.workspace.get();
+    workspacePath = ws && ws.path ? ws.path : null;
+  } catch (e) { /* 无工作区 */ }
+  const candidates = pathCandidates(rawPath, workspacePath);
+  let lastError = null;
+  for (const candidate of candidates) {
+    try {
+      const stat = await pi.fs.stat(candidate);
+      const size = stat ? stat.size : NaN;
+      assertReadableImage(candidate, size);
+      const probeLen = Math.min(size, 256 * 1024);
+      const range = await pi.fs.readRange(candidate, 0, probeLen);
+      const bytes = range && range.bytes ? range.bytes : range;
+      const meta = imageMeta.probeImage(bytes);
+      const dims = meta && meta.width ? `${meta.width}x${meta.height}` : "unknown dimensions";
+      const mime = meta && meta.mimeType ? meta.mimeType : declaredMime;
+      return {
+        content: [{
+          type: "text",
+          text: `${candidate}: ${mime}, ${dims}, ${humanSize(size)} (${size} bytes). Metadata only — call read_image to attach the visual content.`,
+        }],
+      };
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw new Error(
+    (
+      `image_info could not read ${rawPath}.` +
+      (lastError ? ` Last error: ${lastError.message}.` : "")
+    ).trim()
+  );
+}
+
+/** list_images：按扩展名 glob 工作区图片，合并去重排序，带上限与大小。 */
+async function executeListImages(args /* , ctx */) {
+  const pi = globalThis.pi;
+  if (!pi || !pi.fs || !pi.fs.glob) throw new Error("vision-kit: host fs API unavailable");
+  const dir = args && typeof args.dir === "string" ? args.dir.trim().replace(/^\/+|\/+$/g, "") : "";
+  const LIMIT = 200;
+  const all = new Set();
+  for (const ext of Object.keys(SUPPORTED_EXTENSIONS)) {
+    const pattern = dir ? `${dir}/**/*.${ext}` : `**/*.${ext}`;
+    try {
+      const found = await pi.fs.glob(pattern);
+      for (const p of Array.isArray(found) ? found : []) all.add(String(p));
+    } catch (e) {
+      /* 单扩展名失败不阻塞整体 */
+    }
+  }
+  const paths = [...all].sort().slice(0, LIMIT);
+  if (paths.length === 0) {
+    const scope = dir ? ` under "${dir}"` : "";
+    return { content: [{ type: "text", text: `No image files found${scope} in the workspace (searched png/jpg/jpeg/webp/gif).` }] };
+  }
+  const lines = [];
+  for (const p of paths) {
+    let sizeNote = "";
+    try {
+      const stat = await pi.fs.stat(p);
+      if (stat && Number.isFinite(stat.size)) sizeNote = ` ${humanSize(stat.size)}`;
+    } catch (e) { /* stat 失败仅省略大小 */ }
+    lines.push(`- ${p}${sizeNote}`);
+  }
+  const truncated = all.size > LIMIT ? `\n(+${all.size - LIMIT} more not shown)` : "";
+  return {
+    content: [{
+      type: "text",
+      text: `${paths.length} image file(s) in the workspace:\n${lines.join("\n")}${truncated}`,
+    }],
+  };
+}
 
 function extensionToMime(filePath) {
   const m = /\.([A-Za-z0-9]+)$/.exec(String(filePath || ""));
@@ -183,14 +284,53 @@ async function onLoad() {
     },
     execute: executeReadImage,
   });
+  await pi.agent.registerTool({
+    name: "image_info",
+    description: INFO_DESCRIPTION,
+    risk: "low",
+    planSafeActions: ["info"],
+    schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["info"], description: "Fixed action name." },
+        path: {
+          type: "string",
+          description: "Image file path — absolute, or relative to the open workspace.",
+        },
+      },
+      required: ["action", "path"],
+      additionalProperties: false,
+    },
+    execute: executeImageInfo,
+  });
+  await pi.agent.registerTool({
+    name: "list_images",
+    description: LIST_DESCRIPTION,
+    risk: "low",
+    planSafeActions: ["list"],
+    schema: {
+      type: "object",
+      properties: {
+        action: { type: "string", enum: ["list"], description: "Fixed action name." },
+        dir: { type: "string", description: "Optional workspace-relative directory to scope the listing." },
+      },
+      required: ["action"],
+      additionalProperties: false,
+    },
+    execute: executeListImages,
+  });
 }
 
 async function onUnload() {
   try {
     const pi = globalThis.pi;
-    if (pi && pi.agent) await pi.agent.unregisterTool("read_image");
+    if (pi && pi.agent) {
+      await pi.agent.unregisterTool("read_image");
+      await pi.agent.unregisterTool("image_info");
+      await pi.agent.unregisterTool("list_images");
+    }
   } catch (e) {
-    /* 宿主卸载流程会一并回收工具，注销失败可忽略 */
+    /* 宿主卸载流程会一并回收工具 */
   }
 }
 
@@ -198,6 +338,8 @@ module.exports = {
   onLoad,
   onUnload,
   executeReadImage,
+  executeImageInfo,
+  executeListImages,
   _internal: {
     SUPPORTED_EXTENSIONS,
     MAX_IMAGE_BYTES,
