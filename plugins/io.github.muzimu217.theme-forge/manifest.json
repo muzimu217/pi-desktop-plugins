@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.muzimu217.theme-forge",
+  "name": "Theme Forge 主题工坊",
+  "version": "0.1.0",
+  "description": "给 agent 的 AI 主题工作台：用一句自然语言描述想要的样子，agent 生成主题 CSS 并经运行时主题注册表实时应用到整个应用——即见即所得，不满意就继续改，满意后一键导出 CSS。内置主题列表/移除/一键恢复系统主题，全部经宿主主题策略消毒，零出网、零文件访问。",
+  "i18n": {
+    "en": {
+      "name": "Theme Forge",
+      "description": "An AI theme workbench for the agent: describe the look you want in one sentence, the agent generates theme CSS and applies it live to the whole app through the runtime theme registry — instant preview, iterate on feedback, export the CSS when satisfied. Includes theme listing, removal and one-tap reset to the system theme. Sanitized by the host theme policy; zero network, zero file access.",
+      "safetyNotes": "No network egress, no filesystem access. The plugin can only create, update and remove themes registered under its own id (plugin:io.github.muzimu217.theme-forge:*); all CSS passes the host theme sanitizer (size cap, no url()/imports) before it is applied. Applying a theme changes the app appearance only; one action restores the system theme at any time. Exported CSS goes to the clipboard only."
+    },
+    "zh-CN": {
+      "name": "Theme Forge 主题工坊",
+      "description": "给 agent 的 AI 主题工作台：一句自然语言描述想要的样子，agent 生成主题 CSS 并经运行时主题注册表实时应用到整个应用——即见即所得，不满意继续改，满意后一键导出 CSS。内置主题列表/移除/一键恢复系统主题。经宿主主题策略消毒，零出网、零文件访问。",
+      "safetyNotes": "零出网、零文件访问。插件只能创建/更新/移除挂在自己 id 下的主题（plugin:io.github.muzimu217.theme-forge:*）；所有 CSS 先经宿主主题消毒器（大小上限、禁 url()/导入）再应用。应用主题只改变应用外观，随时可一键恢复系统主题。导出的 CSS 仅进入剪贴板。"
+    }
+  },
+  "author": "muzimu217",
+  "main": "main.js",
+  "permissions": [
+    "ui.theme",
+    "agent.tool.register",
+    "clipboard.write"
+  ],
+  "contributes": {
+    "agentTools": [
+      {
+        "name": "theme_forge",
+        "description": "Generate and apply a live theme to the whole app from a natural-language description. Actions: apply (css + label + base[light|dark] + activate[default true] — creates or updates a theme and re-themes the app instantly), list (forged themes), remove (themeId), reset (restore the system theme), export (copy a theme's CSS to the clipboard). Write theme CSS as variable overrides layered on the chosen base palette (light/dark); url() and @import are refused. Iterate on the user's feedback; export only when the user is satisfied.",
+        "risk": "low",
+        "planSafeActions": [
+          "list"
+        ],
+        "schema": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "apply",
+                "list",
+                "remove",
+                "reset",
+                "export"
+              ],
+              "description": "Which theme_forge operation to run."
+            },
+            "css": {
+              "type": "string",
+              "description": "apply only: theme CSS, variable overrides layered on the base palette."
+            },
+            "label": {
+              "type": "string",
+              "description": "apply only: human-readable theme name."
+            },
+            "base": {
+              "type": "string",
+              "enum": [
+                "light",
+                "dark"
+              ],
+              "description": "apply only: base palette. Default dark."
+            },
+            "activate": {
+              "type": "boolean",
+              "description": "apply only: switch the app to the theme immediately. Default true."
+            },
+            "themeId": {
+              "type": "string",
+              "description": "remove/export only: the theme id from the list action."
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "engines": {
+    "piDesktop": ">=0.15.0"
+  },
+  "changelog": "0.1.0：首个版本——theme_forge agent 工具（apply 实时生成并应用主题 CSS/list 列出工坊主题/remove 移除/reset 一键恢复系统主题/export 导出 CSS 到剪贴板）；应用即全宿主实时换肤，无需重启；应用历史存插件设置（近 20 条）；i18n 双语。",
+  "safetyNotes": "零出网、零文件访问。插件只能创建/更新/移除挂在自己 id 下的主题；所有 CSS 先经宿主主题消毒器（大小上限、禁 url()/导入）再应用。应用主题只改变应用外观，reset 随时恢复系统主题。导出的 CSS 仅进入剪贴板。"
+}
