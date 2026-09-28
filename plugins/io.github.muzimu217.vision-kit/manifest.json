@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.muzimu217.vision-kit",
+  "name": "Vision Kit 读图工具",
+  "version": "0.1.0",
+  "description": "给 agent 一个真正能「看见」本地图片的工具：read_image 读取本地图片（png/jpg/jpeg/webp/gif，≤10MB），经工具结果 images 字段把图片作为多模态输入回传，视觉模型可直接看图分析——补上内置 Read 仅限文本的能力缺口。工作区内图片零提示读取；工作区外路径由宿主逐次授权。",
+  "i18n": {
+    "en": {
+      "name": "Vision Kit",
+      "description": "Give the agent a tool that actually sees local images: read_image reads a local image (png/jpg/jpeg/webp/gif, up to 10MB) and returns it through the tool result's images field as multimodal input, so vision-capable models can analyze it directly — closing the gap left by the text-only built-in Read. Images inside the open workspace read without prompts; paths outside fall back to per-path user grants.",
+      "safetyNotes": "Read-only. The plugin declares no network egress, performs no writes or deletes, and executes nothing from image content. File access goes exclusively through the host's scoped fs API: workspace images per the declared glob scope, anything else requires an explicit user grant per path; the host's secret-file denylist (.env, keys, .git, etc.) always applies. Image bytes are attached to the current agent conversation as multimodal input for the configured model and are not uploaded anywhere else."
+    },
+    "zh-CN": {
+      "name": "Vision Kit 读图工具",
+      "description": "给 agent 一个真正能「看见」本地图片的工具：read_image 读取本地图片（png/jpg/jpeg/webp/gif，≤10MB），经工具结果 images 字段把图片作为多模态输入回传，视觉模型可直接看图分析——补上内置 Read 仅限文本的能力缺口。工作区内图片零提示读取；工作区外路径由宿主逐次授权。",
+      "safetyNotes": "纯只读插件：不声明任何出网域名、不写不删、不执行图片内容。文件访问全部经宿主 fs 策略 API：工作区内按声明的 glob 范围读取，范围外每条路径都需用户明确授权；宿主的密钥文件拒绝清单（.env、密钥、.git 等）始终生效。图片字节仅作为多模态输入附加到当前 agent 会话，不上传到任何其他位置。"
+    }
+  },
+  "author": "muzimu217",
+  "main": "main.js",
+  "permissions": ["fs.read", "agent.tool.register"],
+  "contributes": {
+    "agentTools": [
+      {
+        "name": "read_image",
+        "description": "Read ONE local image file and attach it to the conversation as a multimodal image block, so a vision-capable model can actually see it (the built-in Read tool is text-only and cannot do this). Use it whenever the user references a screenshot, mockup, diagram, photo or any image file by path and wants the agent to look at it. Supports png, jpg, jpeg, webp and gif up to 10MB. Images inside the open workspace read without prompts; paths outside the workspace trigger a one-time user grant. Returns a short text summary plus the attached image — never echo base64 image data into your reply.",
+        "risk": "low",
+        "planSafeActions": ["read_image"],
+        "schema": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["read_image"], "description": "Fixed action name." },
+            "path": {
+              "type": "string",
+              "description": "Image file path — absolute, or relative to the open workspace."
+            }
+          },
+          "required": ["action", "path"],
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "fs": {
+    "read": {
+      "root": "workspace",
+      "scope": ["**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.webp", "**/*.gif"]
+    }
+  },
+  "engines": { "piDesktop": ">=0.15.0" },
+  "changelog": "0.1.0：首个版本——read_image agent 工具（校验存在/格式/大小 → pi.fs.readRange 读取 → images 字段多模态回传；workspace 内零提示读取、范围外宿主逐次授权；planSafeActions 声明使 Plan/Goal 模式下可用）。",
+  "safetyNotes": "纯只读插件：不声明任何出网域名、不写不删、不执行图片内容。文件访问全部经宿主 fs 策略 API：工作区内按声明的 glob 范围读取，范围外每条路径都需用户明确授权；宿主的密钥文件拒绝清单（.env、密钥、.git 等）始终生效。图片字节仅作为多模态输入附加到当前 agent 会话，不上传到任何其他位置。"
+}
