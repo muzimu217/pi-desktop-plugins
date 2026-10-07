@@ -25,7 +25,7 @@ PLUGINS = ROOT / "plugins"
 PACKAGES = ROOT / "packages"
 MAX_PACKAGE_BYTES = 50 * 1024 * 1024
 MAX_UNPACKED_BYTES = 200 * 1024 * 1024
-PACKAGE_SKIP = {".git", "node_modules", ".DS_Store"}
+PACKAGE_SKIP = {".git", "node_modules", ".DS_Store", ".mimosa"}
 TEXT_SUFFIXES = {
     ".cjs", ".css", ".html", ".htm", ".js", ".json", ".jsx", ".mjs",
     ".md", ".markdown", ".ts", ".tsx", ".txt", ".vue", ".xml", ".yaml",

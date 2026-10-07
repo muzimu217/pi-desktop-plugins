@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PLUGINS = ROOT / "plugins"
 MAX_PACKAGE_BYTES = 50 * 1024 * 1024
-SKIP = {".git", "node_modules", ".DS_Store"}
+SKIP = {".git", "node_modules", ".DS_Store", ".mimosa"}
 
 
 def crc32(data: bytes) -> int:
